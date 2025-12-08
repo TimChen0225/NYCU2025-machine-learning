@@ -2,10 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import imageio
 import os
-from scipy.spatial.distance import cdist
 import argparse
 import os
 import time
+from scipy.spatial.distance import cdist
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def load_data(image_path):
@@ -98,18 +99,69 @@ def visualize_cluster(labels, img_shape, original_color_data=None):
     return result_img_flat.reshape(img_shape[0], img_shape[1], 3)
 
 
-def plot_eigenspace(eigen_vectors, labels, title="Eigenspace"):
-    output_path = f"{title}.png"
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+def save_eigenspace_plots(eigen_vectors, labels, save_dir, file_prefix):
+    """
+    同時儲存 2D 與 3D (如果維度足夠) 的 Eigenspace 分佈圖
+
+    Args:
+        eigen_vectors: (N, k) 特徵向量矩陣
+        labels: (N,) 分群結果
+        save_dir: 儲存的基礎目錄 (例如: results/image1/Spectral_RatioCut)
+        file_prefix: 檔名前綴 (例如: Eigenspace_k3_random)
+    """
+    # 確保基礎目錄存在
+    os.makedirs(save_dir, exist_ok=True)
+
+    # 取得特徵向量的維度 (k)
+    dim = eigen_vectors.shape[1]
+
+    # ==========================
+    # 1. 繪製 2D 圖 (取前兩個維度)
+    # ==========================
+    dir_2d = os.path.join(save_dir, "2D")
+    os.makedirs(dir_2d, exist_ok=True)
 
     plt.figure(figsize=(8, 6))
     plt.scatter(eigen_vectors[:, 0], eigen_vectors[:, 1], c=labels, cmap="viridis", s=2, alpha=0.6)
-    plt.title(title)
+    plt.title(f"2D Projection: {file_prefix}")
     plt.xlabel("Eigenvector 1")
     plt.ylabel("Eigenvector 2")
-    plt.savefig(f"{title}.png")
+
+    path_2d = os.path.join(dir_2d, f"{file_prefix}_2D.png")
+    plt.savefig(path_2d)
     plt.close()
-    print(f"Saved Eigenspace plot: {output_path}")
+    print(f"Saved 2D plot: {path_2d}")
+
+    # ==========================
+    # 2. 繪製 3D 圖 (如果 k >= 3)
+    # ==========================
+    if dim >= 3:
+        dir_3d = os.path.join(save_dir, "3D")
+        os.makedirs(dir_3d, exist_ok=True)
+
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection="3d")
+
+        # 取前三個維度
+        ax.scatter(
+            eigen_vectors[:, 0], eigen_vectors[:, 1], eigen_vectors[:, 2], c=labels, cmap="viridis", s=2, alpha=0.6
+        )
+
+        ax.set_title(f"3D Projection: {file_prefix}")
+        ax.set_xlabel("Dim 1")
+        ax.set_ylabel("Dim 2")
+        ax.set_zlabel("Dim 3")
+
+        # 調整視角 (Optional: 可以調整 elev 和 azim 來改變觀看角度)
+        ax.view_init(elev=30, azim=45)
+
+        path_3d = os.path.join(dir_3d, f"{file_prefix}_3D.png")
+        plt.savefig(path_3d)
+        plt.close()
+        print(f"Saved 3D plot: {path_3d}")
+    else:
+        # 如果 k=2，就不用畫 3D 了，因為第三維不存在
+        pass
 
 
 def log_execution_info(log_path, method, k, gamma_c, init_method, frames, duration):
@@ -358,7 +410,12 @@ if __name__ == "__main__":
         log_execution_info(LOG_FILE, "Spectral_Ratio", K_CLUSTERS, GAMMA_C, INIT_METHOD, ratio_gif_imgs, ratio_duration)
 
         ratio_plot_path = os.path.join(dir_ratio, f"Eigenspace_k{K_CLUSTERS}_C{GAMMA_C}_{INIT_METHOD}")
-        plot_eigenspace(ratio_vecs, ratio_labels, title=ratio_plot_path)
+        save_eigenspace_plots(
+            ratio_vecs,
+            ratio_labels,
+            save_dir=dir_ratio,
+            file_prefix=f"Eigenspace_k{K_CLUSTERS}_C{GAMMA_C}_{INIT_METHOD}",
+        )
 
         # Spectral Clustering (Normalized Cut)
         print(f">>> Running Spectral Clustering (Normalized Cut, k={K_CLUSTERS})...")
@@ -376,6 +433,8 @@ if __name__ == "__main__":
         log_execution_info(LOG_FILE, "Spectral_Norm", K_CLUSTERS, GAMMA_C, INIT_METHOD, norm_gif_imgs, norm_duration)
 
         norm_plot_path = os.path.join(dir_norm, f"Eigenspace_k{K_CLUSTERS}_C{GAMMA_C}_{INIT_METHOD}")
-        plot_eigenspace(norm_vecs, norm_labels, title=norm_plot_path)
+        save_eigenspace_plots(
+            norm_vecs, norm_labels, save_dir=dir_norm, file_prefix=f"Eigenspace_k{K_CLUSTERS}_C{GAMMA_C}_{INIT_METHOD}"
+        )
 
         print(f"\nDone! Log saved to '{LOG_FILE}'")
